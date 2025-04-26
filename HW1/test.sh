@@ -27,7 +27,7 @@ run_test() {
 
     # Run C implementation
     echo "| Running C implementation..."
-    ./kmeans $k $max_iter < tests/tests/input_${test_num}.txt > tests/test_output/c_output_${test_num}.txt
+    ./kmeans $k $max_iter < tests/input_${test_num}.txt > test_output/c_output_${test_num}.txt
     c_status=$?
 
     # Run Python implementation
@@ -56,7 +56,7 @@ run_test() {
     #     return 1
     # fi
 
-    diff tests/test_output/c_output_${test_num}.txt tests/tests/output_${test_num}.txt > /dev/null
+    diff test_output/c_output_${test_num}.txt tests/output_${test_num}.txt > /dev/null
     if [ $? -ne 0 ]; then
         echo ""
         echo "FAIL: Output doesn't match expected output for test ${test_num}"
