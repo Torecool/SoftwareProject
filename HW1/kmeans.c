@@ -16,6 +16,7 @@
 #define GENERAL_ERROR_MESSAGE "An Error Has Occurred\n"
 #define DATAPOINTS_VECTOR_INITIAL_ITEM_RESERVE (32)
 
+/* Num required args including program name. */
 #define NUM_REQUIRED_ARGS (2)
 #define NUM_OPTIONAL_ARGS (1)
 #define K_VALUE_ARG_INDEX (1)

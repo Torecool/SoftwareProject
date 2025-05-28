@@ -1,0 +1,6 @@
+test_output/
+.vscode/
+__pycache__/
+tests/test_output/
+tests/__MACOSX/
+Archive/
