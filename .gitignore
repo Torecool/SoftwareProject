@@ -4,3 +4,7 @@ __pycache__/
 tests/test_output/
 tests/__MACOSX/
 Archive/
+**/sklearn-env/
+*.so
+**/build/
+temp/

@@ -6,6 +6,14 @@
 
 
 /********************** Functions **********************/
+/**
+ * Calculate the dimension of datapoint coordinates.
+ * We assume that all datapoints are of equal dimension, 
+ * and that the list of datapoints is nonempty.
+ * 
+ * @param datapoints_coords Python list containing datapoint coord tuples.
+ * @return The number of coordinates per datapoint, or STANDARD_ERROR_CODE if an error occurred.
+ */
 static Py_ssize_t parse_datapoint_dimension(PyObject* datapoints_coords) {
     Py_ssize_t ret_val = STANDARD_ERROR_CODE;
     
@@ -22,7 +30,15 @@ l_cleanup:
 }
 
 
-static int add_datapoints_to_vector(struct vector *datapoints_vector, PyObject* datapoints_coords) {
+/**
+ * Parse a Python list of datapoints and insert them into a vector data structure.
+ * 
+ * @param datapoints_vector Vector data structure to add datapoints to.
+ * @param datapoints_coords Python list containing datapoint coord tuples.
+ * @param data_dimension The dimension of the datapoints.
+ * @return The status of the operation. STANDARD_SUCCESS_CODE for success, STANDARD_ERROR_CODE for error.
+ */
+static int add_datapoints_to_vector(struct vector *datapoints_vector, PyObject* datapoints_coords, size_t data_dimension) {
     int status_code = STANDARD_ERROR_CODE;
     struct datapoint_item temp_datapoint_item = {0};
     double *temp_data = NULL;
@@ -33,20 +49,17 @@ static int add_datapoints_to_vector(struct vector *datapoints_vector, PyObject* 
     for (Py_ssize_t index = 0; index < num_datapoints; index++) {
         /* Borrowed reference. */
         PyObject* datapoint = PyList_GetItem(datapoints_coords, index); 
-
         if (!PyTuple_Check(datapoint)) {
             PyErr_SetString(PyExc_TypeError, "Each item in datapoints must be a tuple.");
             goto l_cleanup;
         }
-
-        Py_ssize_t data_dimension = PyTuple_Size(datapoint);
 
         temp_data = malloc(sizeof(double) * data_dimension);
         if (NULL == temp_data) {
             goto l_cleanup;
         }
 
-        for (Py_ssize_t j = 0; j < data_dimension; ++j) {
+        for (size_t j = 0; j < data_dimension; ++j) {
             /* Borrowed reference. */
             PyObject* coord = PyTuple_GetItem(datapoint, j); 
             temp_data[j] = PyFloat_AsDouble(coord);
@@ -73,6 +86,13 @@ l_cleanup:
 }
 
 
+/**
+ * Convert result centroids to a Python list that can be passed back to Python.
+ * 
+ * @param clusters Algorithm result clusters with centroids.
+ * @param data_dimension The dimension of the datapoints.
+ * @return The output Python object, or NULL if an error occurred.
+ */
 static PyObject* build_output_centroids(struct vector *clusters, size_t data_dimension) {
     struct cluster_item temp_cluster_item = {0};
     int status_code = STANDARD_ERROR_CODE;
@@ -98,7 +118,6 @@ static PyObject* build_output_centroids(struct vector *clusters, size_t data_dim
         }
 
         for (size_t dimension_index = 0; dimension_index < data_dimension; dimension_index++) {
-            
             /* Note: steals reference. */
             PyTuple_SetItem(centroid, dimension_index, Py_BuildValue("f", temp_cluster_item.centroid[dimension_index])); 
         }
@@ -119,6 +138,13 @@ l_cleanup:
 }
 
 
+/**
+ * Python entryoint to execute kmeans fitting algorithm.
+ * 
+ * @param self Python caller information.
+ * @param args Arguments passed to the Python native call.
+ * @return The output Python object, or NULL if an error occurred.
+ */
 static PyObject* kmeans_fit(PyObject *self, PyObject *args) {
     PyObject *centroids_coords = NULL;
     PyObject *datapoints_coords = NULL;
@@ -151,7 +177,7 @@ static PyObject* kmeans_fit(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    int data_dimension = parse_datapoint_dimension(datapoints_coords);
+    Py_ssize_t data_dimension = parse_datapoint_dimension(datapoints_coords);
     if (STANDARD_ERROR_CODE == data_dimension) {
         PyErr_SetString(PyExc_ValueError, "Failed to parse datapoint dimension.");
         goto l_cleanup;
@@ -170,8 +196,8 @@ static PyObject* kmeans_fit(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }    
 
-    /* First, load centroids into the datapoints vector. */
-    status_code = add_datapoints_to_vector(datapoints_vector, centroids_coords);
+    /* First, load initial centroids into the datapoints vector. */
+    status_code = add_datapoints_to_vector(datapoints_vector, centroids_coords, data_dimension);
     if (STANDARD_SUCCESS_CODE != status_code) {
         goto l_cleanup;
     }
@@ -192,7 +218,7 @@ static PyObject* kmeans_fit(PyObject *self, PyObject *args) {
     }
 
     /* Load the rest of the datapoints. */
-    status_code = add_datapoints_to_vector(datapoints_vector, datapoints_coords);
+    status_code = add_datapoints_to_vector(datapoints_vector, datapoints_coords, data_dimension);
     if (STANDARD_SUCCESS_CODE != status_code) {
         goto l_cleanup;
     }
@@ -228,24 +254,24 @@ l_cleanup:
 
 /********************** Structures **********************/
 static PyMethodDef kmeans_methods[] = {
-    {"fit",                      /* the Python method name that will be used */
-      (PyCFunction) kmeans_fit,  /* the C-function that implements the Python function and returns static PyObject*  */
-      METH_VARARGS,              /* flags indicating parameters accepted for this function */
-      PyDoc_STR("TODO")},        /*  The docstring for the function */
-    {NULL, NULL, 0, NULL}        /* The last entry must be all NULL as shown to act as a
-                                 sentinel. Python looks for this entry to know that all
-                                 of the functions for the module have been defined. */
+    {"fit",                                          /* the Python method name that will be used */
+      (PyCFunction) kmeans_fit,                      /* the C-function that implements the Python function and returns static PyObject*  */
+      METH_VARARGS,                                  /* flags indicating parameters accepted for this function */
+      PyDoc_STR("Fit centroids via kmeans. Expected arguments: (initial_centroids: list[tuple], datapoints: list[tuple], num_iter: int, epsilon: float)")},
+    {NULL, NULL, 0, NULL}                            /* The last entry must be all NULL as shown to act as a
+                                                        sentinel. Python looks for this entry to know that all
+                                                        of the functions for the module have been defined. */
 };
 
 static struct PyModuleDef kmeans_module = {
     PyModuleDef_HEAD_INIT,
-    "mykmeanssp",                /* name of module */
+    "mykmeanspp",                /* name of module */
     NULL,                        /* module documentation, may be NULL */
     -1,                          /* size of per-interpreter state of the module, or -1 if the module keeps state in global variables. */
     kmeans_methods               /* the PyMethodDef array from before containing the methods of the extension */
 };
 
-PyMODINIT_FUNC PyInit_mykmeanssp(void)
+PyMODINIT_FUNC PyInit_mykmeanspp(void)
 {
     PyObject *m;
     m = PyModule_Create(&kmeans_module);
