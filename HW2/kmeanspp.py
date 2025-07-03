@@ -28,8 +28,8 @@ FILENAME_2_ARG_INDEX = 5
 ERROR_EXIT_CODE = 1
 
 # Error messages
-INVALID_K_VALUE_MESSAGE = 'Incorrect number of clusters!'
-INVALID_NUM_ITERATIONS_MESSAGE = 'Incorrect maximum iteration!'
+INVALID_K_VALUE_MESSAGE = 'Invalid number of clusters!'
+INVALID_NUM_ITERATIONS_MESSAGE = 'Invalid maximum iteration!'
 INVALID_EPSILON_MESSAGE = 'Invalid epsilon!'
 GENERAL_ERROR_MESSAGE = 'An Error Has Occurred'
 
@@ -81,13 +81,18 @@ def kmeans(datapoints, k_param, iter_param, epsilon_param):
 
 
 def parse_args():
-    if len(sys.argv) < NUM_REQUIRED_ARGS:
+    if len(sys.argv) < NUM_REQUIRED_ARGS or len(sys.argv) > NUM_REQUIRED_ARGS + NUM_OPTIONAL_ARGS:
         print(GENERAL_ERROR_MESSAGE)
         raise
 
     try:
         # Validate mandatory parameters
-        k_param = int(sys.argv[K_VALUE_ARG_INDEX])
+        k_param = float(sys.argv[K_VALUE_ARG_INDEX])
+        if k_param.is_integer():
+            k_param = int(k_param)
+        else:
+            raise ValueError(f"Expected an integer-like value, got non-integer: {k_param}")
+        
         assert MINIMUM_VALID_K_VALUE < k_param
     except:
         print(INVALID_K_VALUE_MESSAGE)
@@ -100,8 +105,12 @@ def parse_args():
             iter_param = DEFAULT_NUM_ITERATIONS
             optional_parameter_shift = 1
         else:
-            iter_param = int(sys.argv[NUM_ITERATIONS_ARG_INDEX])
-
+            iter_param = float(sys.argv[NUM_ITERATIONS_ARG_INDEX])
+            if iter_param.is_integer():
+                iter_param = int(iter_param)
+            else:
+                raise ValueError(f"Expected an integer-like value, got non-integer: {iter_param}")
+                
         assert MINIMUM_VALID_NUM_ITERATIONS < iter_param and iter_param < MAXIMUM_VALID_NUM_ITERATIONS
     except:
         print(INVALID_NUM_ITERATIONS_MESSAGE)
@@ -109,7 +118,7 @@ def parse_args():
 
     # Validate more mandatory parameters
     try:
-        epsilon_param = int(sys.argv[EPSILON_ARG_INDEX - optional_parameter_shift])
+        epsilon_param = float(sys.argv[EPSILON_ARG_INDEX - optional_parameter_shift])
         assert MINIMUM_VALID_EPSILON_VALUE <= epsilon_param
     except:
         print(INVALID_EPSILON_MESSAGE)
@@ -165,6 +174,5 @@ if __name__ == "__main__":
         selected_centroids, final_centroids = kmeans(datapoints, k_param, iter_param, epsilon_param)
         print_results(selected_centroids, final_centroids)
     except Exception as e:
-        raise
         print(GENERAL_ERROR_MESSAGE)
         sys.exit(ERROR_EXIT_CODE)
