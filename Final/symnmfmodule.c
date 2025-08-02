@@ -144,7 +144,7 @@ static PyObject *symnmfmodule_build_output_matrix(struct matrix *result_matrix) 
         (npy_intp) result_matrix->column_count
     };
 
-    /* Create NumPy array wrapping the existing C buffer. */
+    /* Create numpy array wrapping the existing C buffer. */
     PyObject *matrix_array = PyArray_SimpleNewFromData(
         2,                           /* ndim */ 
         matrix_dimensions,           /* shape */
@@ -155,7 +155,7 @@ static PyObject *symnmfmodule_build_output_matrix(struct matrix *result_matrix) 
         return NULL;
     }
 
-    /* Prevent NumPy from trying to free the data buffer. */
+    /* Notify numpy that is owns the data buffer. */
     PyArray_ENABLEFLAGS((PyArrayObject *) matrix_array, NPY_ARRAY_OWNDATA);
 
     return matrix_array;
@@ -198,7 +198,7 @@ static PyObject* symnmfmodule_symnmf(PyObject *self, PyObject *args) {
         PyErr_SetString(PyExc_TypeError, "Invalid parameters.");
         goto l_cleanup;
     }
-
+    
     /* Convert input to matrix datastructure. */
     status_code = symnmfmodule_numpy_array_to_matrix(initial_h_matrix_array, &initial_h_matrix);
     if (STANDARD_SUCCESS_CODE != status_code) {
@@ -219,7 +219,9 @@ static PyObject* symnmfmodule_symnmf(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    /* Convert the result to numpy format. */
+    /* Convert the result to numpy format.
+     * Note that numpy will own the underlying buffer.
+     */
     result_obj = symnmfmodule_build_output_matrix(result_matrix);
     if (NULL == result_obj) {
         PyErr_SetString(PyExc_TypeError, "Failed to build output matrix.");
@@ -228,16 +230,6 @@ static PyObject* symnmfmodule_symnmf(PyObject *self, PyObject *args) {
 
     status_code = STANDARD_SUCCESS_CODE;
 l_cleanup:
-    if (NULL != initial_h_matrix_obj) {
-        Py_DECREF(initial_h_matrix_obj);
-        initial_h_matrix_obj = NULL;
-    }
-
-    if (NULL != w_matrix_obj) {
-        Py_DECREF(w_matrix_obj);
-        w_matrix_obj = NULL;
-    }
-
     if (NULL != w_matrix_array) {
         Py_DECREF(w_matrix_array);
         w_matrix_array = NULL;
@@ -253,9 +245,18 @@ l_cleanup:
         w_matrix = NULL;
     }
 
-    if (NULL != result_matrix) {
-        MATRIX_free(result_matrix);
-        result_matrix = NULL;
+    if (NULL == result_obj) {
+        /* Numpy does not yet own the buffer, safe to release. */
+        if (NULL != result_matrix) {
+            MATRIX_free(result_matrix);
+            result_matrix = NULL;
+        }
+    } else {
+        /* Numpy owns the buffer, only release wrapper object. */
+        if (NULL != result_matrix) {
+            free(result_matrix);
+            result_matrix = NULL;
+        }
     }
 
     return result_obj;
@@ -305,7 +306,9 @@ static PyObject* symnmfmodule_sym(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    /* Convert the result to numpy format. */
+    /* Convert the result to numpy format.
+     * Note that numpy will own the underlying buffer.
+     */
     result_obj = symnmfmodule_build_output_matrix(result_matrix);
     if (NULL == result_obj) {
         PyErr_SetString(PyExc_TypeError, "Failed to build output matrix.");
@@ -324,9 +327,18 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL != result_matrix) {
-        MATRIX_free(result_matrix);
-        result_matrix = NULL;
+    if (NULL == result_obj) {
+        /* Numpy does not yet own the buffer, safe to release. */
+        if (NULL != result_matrix) {
+            MATRIX_free(result_matrix);
+            result_matrix = NULL;
+        }
+    } else {
+        /* Numpy owns the buffer, only release wrapper object. */
+        if (NULL != result_matrix) {
+            free(result_matrix);
+            result_matrix = NULL;
+        }
     }
 
     return result_obj;
@@ -376,7 +388,9 @@ static PyObject* symnmfmodule_ddg(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    /* Convert the result to numpy format. */
+    /* Convert the result to numpy format.
+     * Note that numpy will own the underlying buffer.
+     */
     result_obj = symnmfmodule_build_output_matrix(result_matrix);
     if (NULL == result_obj) {
         PyErr_SetString(PyExc_TypeError, "Failed to build output matrix.");
@@ -395,9 +409,18 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL != result_matrix) {
-        MATRIX_free(result_matrix);
-        result_matrix = NULL;
+    if (NULL == result_obj) {
+        /* Numpy does not yet own the buffer, safe to release. */
+        if (NULL != result_matrix) {
+            MATRIX_free(result_matrix);
+            result_matrix = NULL;
+        }
+    } else {
+        /* Numpy owns the buffer, only release wrapper object. */
+        if (NULL != result_matrix) {
+            free(result_matrix);
+            result_matrix = NULL;
+        }
     }
 
     return result_obj;
@@ -447,7 +470,9 @@ static PyObject* symnmfmodule_norm(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    /* Convert the result to numpy format. */
+    /* Convert the result to numpy format.
+     * Note that numpy will own the underlying buffer.
+     */
     result_obj = symnmfmodule_build_output_matrix(result_matrix);
     if (NULL == result_obj) {
         PyErr_SetString(PyExc_TypeError, "Failed to build output matrix.");
@@ -466,9 +491,18 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL != result_matrix) {
-        MATRIX_free(result_matrix);
-        result_matrix = NULL;
+    if (NULL == result_obj) {
+        /* Numpy does not yet own the buffer, safe to release. */
+        if (NULL != result_matrix) {
+            MATRIX_free(result_matrix);
+            result_matrix = NULL;
+        }
+    } else {
+        /* Numpy owns the buffer, only release wrapper object. */
+        if (NULL != result_matrix) {
+            free(result_matrix);
+            result_matrix = NULL;
+        }
     }
 
     return result_obj;
@@ -520,7 +554,7 @@ PyMODINIT_FUNC PyInit_symnmfmodule(void)
     
     /* Initialize numpy internal state. */
     import_array();
-    
+
     m = PyModule_Create(&symnmf_module);
     if (!m) {
         return NULL;

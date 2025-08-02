@@ -92,7 +92,13 @@ def perform_analysis(k_value, datapoints):
     # Execute kmeans algorithm.
     datapoint_list = [tuple(point) for point in datapoints]
     clusters_list = kmeans(datapoint_list, k_value, MAX_ITERATIONS)
-    kmeans_labels = np.array(np.array(cluster.datapoints) for cluster in clusters_list)
+
+    # Extract labels from cluster output.
+    kmeans_labels = np.empty(len(datapoints), dtype=int)
+    for datapoint_index, datapoint in enumerate(datapoints):
+        for cluster_index, cluster in enumerate(clusters_list):
+            if tuple(datapoint) in cluster.datapoints:
+                kmeans_labels[datapoint_index] = cluster_index
 
     # Execute SymNMF algorithm.
     final_h_matrix = symnmf_goal_handler(k_value, datapoints)

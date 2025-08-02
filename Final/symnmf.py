@@ -173,7 +173,6 @@ def parse_args():
     return (k_param, goal_param, filename_param)
 
 
-# Print algorithm results to stdout.
 def print_results(output_matrix):
     """
     Print the selected goal's output matrix. 

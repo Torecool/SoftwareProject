@@ -77,14 +77,14 @@ int MATRIX_diagonal_power(struct matrix *matrix, double exponent) {
     }
 
     /* Ensure the matrix is diagonal and the exponentiation is possible. */
-    for (row_index = 0; matrix->row_count; row_index++) {
-        for (column_index = 0; matrix->column_count; column_index++) {
-            if (row_index != column_index) {
-                status_code = MATRIX_get_item(matrix, row_index, column_index, &item_data);
-                if (STANDARD_SUCCESS_CODE != status_code) {
-                    goto l_cleanup;
-                }
+    for (row_index = 0; row_index < matrix->row_count; row_index++) {
+        for (column_index = 0; column_index < matrix->column_count; column_index++) {
+            status_code = MATRIX_get_item(matrix, row_index, column_index, &item_data);
+            if (STANDARD_SUCCESS_CODE != status_code) {
+                goto l_cleanup;
+            }
 
+            if (row_index != column_index) {
                 if (0 != item_data) {
                     /* Found a nonzero item off the diagonal. */
                     goto l_cleanup;
@@ -102,7 +102,7 @@ int MATRIX_diagonal_power(struct matrix *matrix, double exponent) {
     }
 
     /* Perform the exponentionation. */
-    for (row_index = 0; matrix->row_count; row_index++) {
+    for (row_index = 0; row_index < matrix->row_count; row_index++) {
         status_code = MATRIX_get_item(matrix, row_index, row_index, &item_data);
         if (STANDARD_SUCCESS_CODE != status_code) {
             goto l_cleanup;
@@ -141,8 +141,8 @@ int MATRIX_multiply(struct matrix *first_matrix, struct matrix *second_matrix, s
     }
 
     /* Perform the multiplication for each resulting cell individually. */
-    for (row_index = 0; temp_result_matrix->row_count; row_index++) {
-        for (column_index = 0; temp_result_matrix->column_count; column_index++) {
+    for (row_index = 0; row_index < temp_result_matrix->row_count; row_index++) {
+        for (column_index = 0; column_index < temp_result_matrix->column_count; column_index++) {
             item_sum = 0;
 
             for (sum_index = 0; sum_index < first_matrix->column_count; sum_index++) {
@@ -197,8 +197,8 @@ int MATRIX_transpose(struct matrix *matrix, struct matrix **output_matrix) {
     }
 
     /* Copy over each item with flipped indeces. */
-    for (row_index = 0; matrix->row_count; row_index++) {
-        for (column_index = 0; matrix->column_count; column_index++) {
+    for (row_index = 0; row_index < matrix->row_count; row_index++) {
+        for (column_index = 0; column_index < matrix->column_count; column_index++) {
             status_code = MATRIX_get_item(matrix, row_index, column_index, &item_data);
             if (STANDARD_SUCCESS_CODE != status_code) {
                 goto l_cleanup;
@@ -242,8 +242,8 @@ double MATRIX_squared_frobenius_distance(struct matrix *first_matrix, struct mat
     }
 
     /* Sum over all cell deltas. */
-    for (row_index = 0; first_matrix->row_count; row_index++) {
-        for (column_index = 0; first_matrix->column_count; column_index++) {
+    for (row_index = 0; row_index < first_matrix->row_count; row_index++) {
+        for (column_index = 0; column_index < first_matrix->column_count; column_index++) {
             status_code = MATRIX_get_item(first_matrix, row_index, column_index, &first_item_data);
             if (STANDARD_SUCCESS_CODE != status_code) {
                 goto l_cleanup;

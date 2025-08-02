@@ -65,8 +65,14 @@ static int symnmf_update_h_matrix(
     double h_mult_ht_mult_h_item = 0;
     double next_h_item = 0;
 
+    /* Allocate next H(t+1). */
+    temp_next_h_matrix = MATRIX_allocate(prev_h_matrix->row_count, prev_h_matrix->column_count);
+    if (NULL == temp_next_h_matrix) {
+        goto l_cleanup;
+    }
+
     /* Calculate W * H(t). */
-    status_code = MATRIX_multiply(prev_h_matrix, w_matrix, &temp_w_mult_h_matrix);
+    status_code = MATRIX_multiply(w_matrix, prev_h_matrix, &temp_w_mult_h_matrix);
     if (STANDARD_SUCCESS_CODE != status_code) {
         goto l_cleanup;
     }
@@ -76,7 +82,7 @@ static int symnmf_update_h_matrix(
     if (STANDARD_SUCCESS_CODE != status_code) {
         goto l_cleanup;
     }
-
+    
     /* Calculate H(t) * H(t)^T. */
     status_code = MATRIX_multiply(prev_h_matrix, temp_h_transpose_matrix, &temp_h_mult_ht_matrix);
     if (STANDARD_SUCCESS_CODE != status_code) {
@@ -167,6 +173,8 @@ int SYMNMF_symnmf_algorithm(
     double convergence_distance = 0;
 
     do {
+        temp_next_h_matrix = NULL;
+
         if (current_iterations == MAX_ITERATIONS) {
             /* Reached maximum iterations. */
             break;
@@ -196,6 +204,8 @@ int SYMNMF_symnmf_algorithm(
         current_iterations++;
     } while (convergence_distance >= CONVERGENCE_THRESHOLD);
 
+    temp_prev_h_matrix = NULL;
+
     /* Transfer ownership. */
     if (NULL != output_result_h_matrix) {
         *output_result_h_matrix = temp_next_h_matrix;
@@ -204,14 +214,15 @@ int SYMNMF_symnmf_algorithm(
 
     status_code = SUCCESS_EXIT_CODE;
 l_cleanup:
+    /* Ensure we are not accidentally freeing either the initial or final H matrices. */    
+    if ((NULL != temp_prev_h_matrix) && (initial_h_matrix != temp_prev_h_matrix) && (temp_next_h_matrix != temp_prev_h_matrix)) {
+        MATRIX_free(temp_prev_h_matrix);
+        temp_prev_h_matrix = NULL;  
+    }
+
     if (NULL != temp_next_h_matrix) {
         MATRIX_free(temp_next_h_matrix);
         temp_next_h_matrix = NULL;
-    }
-    
-    if ((NULL != temp_prev_h_matrix) && (initial_h_matrix != temp_prev_h_matrix)) {
-        MATRIX_free(temp_prev_h_matrix);
-        temp_prev_h_matrix = NULL;  
     }
 
     return status_code;
@@ -353,8 +364,8 @@ int SYMNMF_calc_diagonal_degree_matrix(
     }
 
     if (NULL != output_similarity_matrix) {
-        *output_similarity_matrix = temp_ddg_matrix;
-        temp_ddg_matrix = NULL;
+        *output_similarity_matrix = temp_similarity_matrix;
+        temp_similarity_matrix = NULL;
     }
 
     status_code = SUCCESS_EXIT_CODE;
@@ -517,7 +528,7 @@ static int symnmf_print_results(struct matrix *result_matrix) {
             printf("%.4f", item_data);
 
             /* Print delimiter if not the last column. */
-            if (column_index < result_matrix->column_count) {
+            if (column_index < result_matrix->column_count - 1) {
                 printf(",");
             }
         }
