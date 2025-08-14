@@ -67,8 +67,8 @@ def print_results(score_kmeans, score_symnmf):
     score_symnmf : float
         The silhouette coefficient of the SymNMF algorithm.
     """
-    print(f"sym: {score_symnmf}")
-    print(f"kmeans: {score_kmeans}")
+    print(f"nmf: {score_symnmf:.4f}")
+    print(f"kmeans: {score_kmeans:.4f}")
 
 
 def process_input(filename):

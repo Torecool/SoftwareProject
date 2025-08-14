@@ -37,6 +37,9 @@ def symnmf_goal_handler(k_value, datapoints):
     np.ndarray
         A 2D NumPy array representing the output association matrix.
     """
+    # K value is used here so need to validate.
+    assert MINIMUM_VALID_K_VALUE < k_value
+
     n_value = len(datapoints)
 
     # Calculate normalized similarity W matrix.
@@ -149,9 +152,7 @@ def parse_args():
         if k_param.is_integer():
             k_param = int(k_param)
         else:
-            raise ValueError(f"Expected an integer-like value, got non-integer: {k_param}")
-        
-        assert MINIMUM_VALID_K_VALUE < k_param
+            raise ValueError(f"Expected an integer-like value, got non-integer: {k_param}")        
     except:
         print(GENERAL_ERROR_MESSAGE)
         raise
@@ -183,7 +184,7 @@ def print_results(output_matrix):
         A 2D NumPy array representing the output matrix.
     """
     for row in output_matrix:
-        print(", ".join(f"{val:.4f}" for val in row))
+        print(",".join(f"{val:.4f}" for val in row))
 
 
 def process_input(filename):
