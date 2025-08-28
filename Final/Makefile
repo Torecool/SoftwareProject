@@ -3,7 +3,7 @@
 CC = gcc
 CFLAGS = -ansi -Wall -Wextra -Werror -pedantic-errors
 TARGET = symnmf
-SRC = symnmf.c vector.c matrix.c
+SRC = symnmf.c symnmf_impl.c vector.c matrix.c
 
 all: $(TARGET)
 

@@ -3,7 +3,7 @@ import numpy
 
 module = Extension(
     "symnmfmodule",
-    sources=['symnmfmodule.c', 'symnmf.c', 'vector.c', 'matrix.c'],
+    sources=['symnmfmodule.c', 'symnmf.c', 'symnmf_impl.c', 'vector.c', 'matrix.c'],
     include_dirs=[numpy.get_include()]
 )
 

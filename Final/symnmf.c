@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <math.h>
 #include <errno.h>
 
 #include "symnmf.h"
@@ -12,9 +11,6 @@
 /********************** Constants *****************************/
 #define GENERAL_ERROR_MESSAGE "An Error Has Occurred\n"
 #define DATAPOINTS_VECTOR_INITIAL_ITEM_RESERVE (32)
-#define MAX_ITERATIONS (300)
-#define CONVERGENCE_THRESHOLD (1e-4)
-#define BETA_VALUE (0.5)
 
 /* Num required args including program name. */
 #define NUM_REQUIRED_ARGS (3)
@@ -26,460 +22,6 @@
 #define ERROR_EXIT_CODE (1)
 #define SUCCESS_EXIT_CODE (0)
 
-/********************** SymNMF Algorithm **********************/
-/**
- * Calculate the sqaured Euclidian distance of two given datapoints (of the same dimension).
- * 
- * @param first_point The first datapoint in the calculation.
- * @param second_point The second datapoint in the calculation.
- * @param dimension The dimension of the datapoints.
- * @return The computed distance.
- */
-static double symnmf_squared_euclidian_distance(double *first_point, double *second_point, size_t dimension) {
-    double temp_distance = 0;
-    size_t i = 0;
-
-    for (i = 0; i < dimension; i++) {
-        temp_distance += pow(first_point[i] - second_point[i], 2);
-    }
-
-    return temp_distance;
-}
-
-
-static int symnmf_update_h_matrix(
-    struct matrix *prev_h_matrix,
-    struct matrix *w_matrix,
-    struct matrix **output_next_h_matrix
-) {
-    int status_code = STANDARD_ERROR_CODE;
-    struct matrix *temp_w_mult_h_matrix = NULL;
-    struct matrix *temp_h_transpose_matrix = NULL;
-    struct matrix *temp_h_mult_ht_matrix = NULL;
-    struct matrix *temp_h_mult_ht_mult_h_matrix = NULL;
-    struct matrix *temp_next_h_matrix = NULL;
-    size_t row_index = 0;
-    size_t column_index = 0;
-    double prev_h_item = 0;
-    double w_mult_h_item = 0;
-    double h_mult_ht_mult_h_item = 0;
-    double next_h_item = 0;
-
-    /* Allocate next H(t+1). */
-    temp_next_h_matrix = MATRIX_allocate(prev_h_matrix->row_count, prev_h_matrix->column_count);
-    if (NULL == temp_next_h_matrix) {
-        goto l_cleanup;
-    }
-
-    /* Calculate W * H(t). */
-    status_code = MATRIX_multiply(w_matrix, prev_h_matrix, &temp_w_mult_h_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Calculate H(t) transpose. */
-    status_code = MATRIX_transpose(prev_h_matrix, &temp_h_transpose_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-    
-    /* Calculate H(t) * H(t)^T. */
-    status_code = MATRIX_multiply(prev_h_matrix, temp_h_transpose_matrix, &temp_h_mult_ht_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Calculate (H(t) * H(t)^T) * H(t). */
-    status_code = MATRIX_multiply(temp_h_mult_ht_matrix, prev_h_matrix, &temp_h_mult_ht_mult_h_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    for (row_index = 0; row_index < prev_h_matrix->row_count; row_index++) {
-        for (column_index = 0; column_index < prev_h_matrix->column_count; column_index++) {
-            /* Get (W * H(t))_ij. */
-            status_code = MATRIX_get_item(temp_w_mult_h_matrix, row_index, column_index, &w_mult_h_item);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-
-            /* Get ((H(t) * H(t)^T) * H(t))_ij. */
-            status_code = MATRIX_get_item(temp_h_mult_ht_mult_h_matrix, row_index, column_index, &h_mult_ht_mult_h_item);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-
-            /* Get (H(t))_ij. */
-            status_code = MATRIX_get_item(prev_h_matrix, row_index, column_index, &prev_h_item);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-
-            /* Compute next (H(t+1))_ij. */
-            next_h_item = prev_h_item * (1 - BETA_VALUE + BETA_VALUE * (w_mult_h_item / h_mult_ht_mult_h_item));
-            status_code = MATRIX_set_item(temp_next_h_matrix, row_index, column_index, next_h_item);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-        }
-    }
-
-    /* Transfer ownership. */
-    if (NULL != output_next_h_matrix) {
-        *output_next_h_matrix = temp_next_h_matrix;
-        temp_next_h_matrix = NULL;
-    }
-
-    status_code = SUCCESS_EXIT_CODE;
-l_cleanup:
-    if (NULL != temp_w_mult_h_matrix) {
-        MATRIX_free(temp_w_mult_h_matrix);
-        temp_w_mult_h_matrix = NULL;
-    }
-
-    if (NULL != temp_h_transpose_matrix) {
-        MATRIX_free(temp_h_transpose_matrix);
-        temp_h_transpose_matrix = NULL;
-    }
-
-    if (NULL != temp_h_mult_ht_matrix) {
-        MATRIX_free(temp_h_mult_ht_matrix);
-        temp_h_mult_ht_matrix = NULL;
-    }
-
-    if (NULL != temp_h_mult_ht_mult_h_matrix) {
-        MATRIX_free(temp_h_mult_ht_mult_h_matrix);
-        temp_h_mult_ht_mult_h_matrix = NULL;
-    }
-
-    if (NULL != temp_next_h_matrix) {
-        MATRIX_free(temp_next_h_matrix);
-        temp_next_h_matrix = NULL;
-    }
-    
-    return status_code;
-}
-
-
-int SYMNMF_symnmf_algorithm(
-    struct matrix *initial_h_matrix, 
-    struct matrix *norm_matrix, 
-    struct matrix **output_result_h_matrix
-) {
-    int status_code = STANDARD_ERROR_CODE;
-    struct matrix *temp_prev_h_matrix = initial_h_matrix;
-    struct matrix *temp_next_h_matrix = NULL;
-    size_t current_iterations = 0;
-    double convergence_distance = 0;
-
-    do {
-        temp_next_h_matrix = NULL;
-
-        if (current_iterations == MAX_ITERATIONS) {
-            /* Reached maximum iterations. */
-            break;
-        }
-
-        /* Compute the next H matrix. */
-        status_code = symnmf_update_h_matrix(temp_prev_h_matrix, norm_matrix, &temp_next_h_matrix);
-        if (SUCCESS_EXIT_CODE != status_code) {
-            goto l_cleanup;
-        }
-
-        /* Compute convergence distance between prev and next H matrices. */
-        convergence_distance = MATRIX_squared_frobenius_distance(temp_prev_h_matrix, temp_next_h_matrix);
-        if (0 > convergence_distance) {
-            goto l_cleanup;
-        }
-
-        /* Release the previous H matrix 
-         * (unless it is the initial matrix, which is not owned by this function). 
-         */
-        if (initial_h_matrix != temp_prev_h_matrix) {
-            MATRIX_free(temp_prev_h_matrix);
-            temp_prev_h_matrix = NULL;   
-        }
-
-        temp_prev_h_matrix = temp_next_h_matrix;
-        current_iterations++;
-    } while (convergence_distance >= CONVERGENCE_THRESHOLD);
-
-    temp_prev_h_matrix = NULL;
-
-    /* Transfer ownership. */
-    if (NULL != output_result_h_matrix) {
-        *output_result_h_matrix = temp_next_h_matrix;
-        temp_next_h_matrix = NULL;
-    }
-
-    status_code = SUCCESS_EXIT_CODE;
-l_cleanup:
-    /* Ensure we are not accidentally freeing either the initial or final H matrices. */    
-    if ((NULL != temp_prev_h_matrix) && (initial_h_matrix != temp_prev_h_matrix) && (temp_next_h_matrix != temp_prev_h_matrix)) {
-        MATRIX_free(temp_prev_h_matrix);
-        temp_prev_h_matrix = NULL;  
-    }
-
-    if (NULL != temp_next_h_matrix) {
-        MATRIX_free(temp_next_h_matrix);
-        temp_next_h_matrix = NULL;
-    }
-
-    return status_code;
-}
-
-
-int SYMNMF_calc_similarity_matrix(struct vector *datapoints_vector, size_t data_dimension, struct matrix **output_similarity_matrix) {
-    int status_code = STANDARD_ERROR_CODE;
-    double item_value = 0;
-    struct datapoint_item temp_first_datapoint = {0};
-    struct datapoint_item temp_second_datapoint = {0};
-    double datapoint_distance = 0;
-    struct matrix *temp_similarity_matrix = NULL;
-    size_t row_index = 0;
-    size_t column_index = 0;
-
-    /* Allocate an NxN square matrix for the similarity matrix. */
-    temp_similarity_matrix = MATRIX_allocate(datapoints_vector->item_count, datapoints_vector->item_count);
-    if (NULL == temp_similarity_matrix) {
-        goto l_cleanup;
-    }
-
-    for (row_index = 0; row_index < temp_similarity_matrix->row_count; row_index++) {
-        for (column_index = row_index; column_index < temp_similarity_matrix->column_count; column_index++) {
-            item_value = 0;
-            
-            /* Zeros on the diagonal, otherwise we have:
-             * A_ij = exp(-(||x_i - x_j||^2)/2)
-             */
-            if (row_index != column_index) {
-                status_code = VECTOR_get_item(datapoints_vector, row_index, &temp_first_datapoint);
-                if (STANDARD_SUCCESS_CODE != status_code) {
-                    goto l_cleanup;
-                }
-                
-                status_code = VECTOR_get_item(datapoints_vector, column_index, &temp_second_datapoint);
-                if (STANDARD_SUCCESS_CODE != status_code) {
-                    goto l_cleanup;
-                }
-
-                /* Set datapoint_distance = ||x_i - x_j||^2 */
-                datapoint_distance = symnmf_squared_euclidian_distance(temp_first_datapoint.coords, temp_second_datapoint.coords, data_dimension);
-
-                item_value = exp(-datapoint_distance/2);
-            }
-
-            /* The matrix is symmetric, so we set the transpose coordinate as well. */
-            status_code = MATRIX_set_item(temp_similarity_matrix, row_index, column_index, item_value);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-
-            status_code = MATRIX_set_item(temp_similarity_matrix, column_index, row_index, item_value);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-        }
-    }
-
-    /* Transfer ownership. */
-    if (NULL != output_similarity_matrix) {
-        *output_similarity_matrix = temp_similarity_matrix;
-        temp_similarity_matrix = NULL;
-    }
-
-    status_code = SUCCESS_EXIT_CODE;
-l_cleanup:
-    if (NULL != temp_similarity_matrix) {
-        MATRIX_free(temp_similarity_matrix);
-        temp_similarity_matrix = NULL;
-    }
-
-    return status_code;
-}
-
-
-int SYMNMF_calc_diagonal_degree_matrix(
-    struct vector *datapoints_vector,
-    size_t data_dimension,
-    struct matrix **output_ddg_matrix,
-    struct matrix **output_similarity_matrix
-) {
-    int status_code = STANDARD_ERROR_CODE;
-    struct matrix *temp_similarity_matrix = NULL;
-    struct matrix *temp_ddg_matrix = NULL;
-    double item_value = 0;
-    double similarity_value = 0;
-    size_t row_index = 0;
-    size_t column_index = 0;
-    size_t similarity_column_index = 0;
-
-    /* Start by computing the similarity matrix. */
-    status_code = SYMNMF_calc_similarity_matrix(datapoints_vector, data_dimension, &temp_similarity_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Allocate an NxN square matrix for the ddg matrix. */
-    temp_ddg_matrix = MATRIX_allocate(datapoints_vector->item_count, datapoints_vector->item_count);
-    if (NULL == temp_ddg_matrix) {
-        goto l_cleanup;
-    }
-
-    for (row_index = 0; row_index < temp_ddg_matrix->row_count; row_index++) {
-        for (column_index = row_index; column_index < temp_ddg_matrix->column_count; column_index++) {
-            item_value = 0;
-            
-            /* Zeros off the diagonal, otherwise we have:
-             * A_ii = sum(A_ij for j in range(N))
-             */
-            if (row_index == column_index) {
-                for (similarity_column_index = 0; similarity_column_index < datapoints_vector->item_count; similarity_column_index++) {
-                    status_code = MATRIX_get_item(temp_similarity_matrix, row_index, similarity_column_index, &similarity_value);
-                    if (STANDARD_SUCCESS_CODE != status_code) {
-                        goto l_cleanup;
-                    }
-
-                    item_value += similarity_value;
-                }
-            }
-
-            /* The matrix is symmetric, so we set the transpose coordinate as well. */
-            status_code = MATRIX_set_item(temp_ddg_matrix, row_index, column_index, item_value);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-
-            status_code = MATRIX_set_item(temp_ddg_matrix, column_index, row_index, item_value);
-            if (STANDARD_SUCCESS_CODE != status_code) {
-                goto l_cleanup;
-            }
-        }
-    }
-
-    /* Transfer ownership. */
-    if (NULL != output_ddg_matrix) {
-        *output_ddg_matrix = temp_ddg_matrix;
-        temp_ddg_matrix = NULL;
-    }
-
-    if (NULL != output_similarity_matrix) {
-        *output_similarity_matrix = temp_similarity_matrix;
-        temp_similarity_matrix = NULL;
-    }
-
-    status_code = SUCCESS_EXIT_CODE;
-l_cleanup:
-    if (NULL != temp_similarity_matrix) {
-        MATRIX_free(temp_similarity_matrix);
-        temp_similarity_matrix = NULL;
-    }
-
-    if (NULL != temp_ddg_matrix) {
-        MATRIX_free(temp_ddg_matrix);
-        temp_ddg_matrix = NULL;
-    }
-
-    return status_code;
-}
-
-
-int SYMNMF_calc_normalized_similarity_matrix(struct vector *datapoints_vector, size_t data_dimension, struct matrix **output_norm_matrix) {
-    int status_code = STANDARD_ERROR_CODE;
-    struct matrix *temp_ddg_matrix = NULL;
-    struct matrix *temp_similarity_matrix = NULL;
-    struct matrix *temp_multiplication_matrix = NULL;
-    struct matrix *temp_norm_matrix = NULL;
-
-    /* Start by computing the similarity and ddg matrices. */
-    status_code = SYMNMF_calc_diagonal_degree_matrix(datapoints_vector, data_dimension, &temp_ddg_matrix, &temp_similarity_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Raise the ddg matrix to the (-1/2) power. */
-    status_code = MATRIX_diagonal_power(temp_ddg_matrix, -0.5);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Perform first multiplication:
-     * temp = (D^(-0.5)) * A 
-     */
-    status_code = MATRIX_multiply(temp_ddg_matrix, temp_similarity_matrix, &temp_multiplication_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Perform second multiplication:
-     * W = temp * (D^(-0.5))
-     */
-    status_code = MATRIX_multiply(temp_multiplication_matrix, temp_ddg_matrix, &temp_norm_matrix);
-    if (STANDARD_SUCCESS_CODE != status_code) {
-        goto l_cleanup;
-    }
-
-    /* Transfer ownership. */
-    if (NULL != output_norm_matrix) {
-        *output_norm_matrix = temp_norm_matrix;
-        temp_norm_matrix = NULL;
-    }
-
-    status_code = SUCCESS_EXIT_CODE;
-l_cleanup:
-    if (NULL != temp_ddg_matrix) {
-        MATRIX_free(temp_ddg_matrix);
-        temp_ddg_matrix = NULL;
-    }
-
-    if (NULL != temp_similarity_matrix) {
-        MATRIX_free(temp_similarity_matrix);
-        temp_similarity_matrix = NULL;
-    }
-
-    if (NULL != temp_multiplication_matrix) {
-        MATRIX_free(temp_multiplication_matrix);
-        temp_multiplication_matrix = NULL;
-    }
-
-    if (NULL != temp_norm_matrix) {
-        MATRIX_free(temp_norm_matrix);
-        temp_norm_matrix = NULL;
-    }
-
-    return status_code;
-}
-
-
-int SYMNMF_free_datapoint_vector(struct vector *datapoints) {
-    int status_code = STANDARD_ERROR_CODE;
-    struct datapoint_item temp_datapoint_item = {0};
-    int datapoint_index = 0;
-
-    for (datapoint_index = datapoints->item_count - 1; datapoint_index >= 0; datapoint_index--) {
-        /* Release buffer from the datastructure. */
-        status_code = VECTOR_get_item(datapoints, datapoint_index, &temp_datapoint_item);
-        if (STANDARD_SUCCESS_CODE != status_code) {
-            goto l_cleanup;
-        }
-
-        free(temp_datapoint_item.coords);
-        temp_datapoint_item.coords = NULL;
-
-        /* Write back reset points to the datastructure. */
-        status_code = VECTOR_set_item(datapoints, datapoint_index, &temp_datapoint_item);
-        if (STANDARD_SUCCESS_CODE != status_code) {
-            goto l_cleanup;
-        }
-
-        datapoints->item_count--;
-    }
-
-    status_code = STANDARD_SUCCESS_CODE;
-l_cleanup:
-    VECTOR_free(datapoints);
-    return status_code;
-}
 
 /********************** Program Entrypoint ********************/
 /**
@@ -588,13 +130,33 @@ l_cleanup:
 }
 
 
-static int symnmf_parse_datapoints_file(const char *filename, struct vector *datapoints_vector, size_t *output_data_dimension) {
+/**
+ * Parse the datapoints input file and load into a data structure. 
+ * 
+ * @param filename The file path of the datapoints file.
+ * @param output_datapoints_vector An optional output parameter to contain the data structure.
+ *  Must later be freed using SYMNMF_free_datapoint_vector.
+ * @param output_data_dimension An optional output parameter to contain the dimension of the datapoints.
+ * @return The status of the operation. STANDARD_SUCCESS_CODE for success, STANDARD_ERROR_CODE for error.
+ */
+static int symnmf_parse_datapoints_file(
+    const char *filename, 
+    struct vector **output_datapoints_vector, 
+    size_t *output_data_dimension
+) {
     int status_code = STANDARD_ERROR_CODE;
     FILE *input_file = NULL;
     char *line_buffer = NULL;
     size_t line_length = 0;
     ssize_t num_bytes_read = STANDARD_ERROR_CODE;
     size_t data_dimension = 0;
+    struct vector *temp_datapoints_vector = NULL;
+
+    /* Allocate a data structure for the datapoints. */
+    temp_datapoints_vector = VECTOR_allocate(sizeof(struct datapoint_item), DATAPOINTS_VECTOR_INITIAL_ITEM_RESERVE);
+    if (NULL == temp_datapoints_vector) {
+        goto l_cleanup;
+    }
 
     /* Try to open input file. */
     input_file = fopen(filename, "r");
@@ -611,7 +173,7 @@ static int symnmf_parse_datapoints_file(const char *filename, struct vector *dat
 
     /* Parse and load all datapoints into vector. */
     do {
-        status_code = symnmf_add_datapoint_to_vector(line_buffer, data_dimension, datapoints_vector);
+        status_code = symnmf_add_datapoint_to_vector(line_buffer, data_dimension, temp_datapoints_vector);
         if (STANDARD_SUCCESS_CODE != status_code) {
             printf(GENERAL_ERROR_MESSAGE);  
             goto l_cleanup;
@@ -628,7 +190,16 @@ static int symnmf_parse_datapoints_file(const char *filename, struct vector *dat
         }
     } while (num_bytes_read > 0);
 
-    *output_data_dimension = data_dimension;
+    /* Transfer ownership. */
+    if (NULL != output_datapoints_vector) {
+        *output_datapoints_vector = temp_datapoints_vector;
+        temp_datapoints_vector = NULL;
+    }
+
+    if (NULL != output_data_dimension) {
+        *output_data_dimension = data_dimension;
+    }
+
     status_code = STANDARD_SUCCESS_CODE;
 l_cleanup:
     if (NULL != input_file) {
@@ -637,11 +208,31 @@ l_cleanup:
     
     free(line_buffer);
 
+    if (NULL != temp_datapoints_vector) {
+        SYMNMF_free_datapoint_vector(temp_datapoints_vector);
+        temp_datapoints_vector = NULL;
+    }
+
     return status_code;
 }
 
 
-static int execute_program_goal(const char *goal_name, struct vector *datapoints_vector, size_t data_dimension, struct matrix **output_matrix) {
+/**
+ * Execute the goal matching the given name.
+ * 
+ * @param goal_name The name of the goal to execute.
+ * @param datapoints_vector The datapoints structure.
+ * @param data_dimension The dimension of the datapoints.
+ * @param output_matrix An optional output parameter to contain matrix which is the result of the operation.
+ *  Must later be freed via MATRIX_free().
+ * @return The status of the operation. STANDARD_SUCCESS_CODE for success, STANDARD_ERROR_CODE for error.
+ */
+static int execute_program_goal(
+    const char *goal_name, 
+    struct vector *datapoints_vector, 
+    size_t data_dimension,
+    struct matrix **output_matrix
+) {
     int status_code = STANDARD_ERROR_CODE;
 
     if (0 == strcmp("sym", goal_name)) {
@@ -664,7 +255,7 @@ static int execute_program_goal(const char *goal_name, struct vector *datapoints
         goto l_cleanup;
     }
 
-    status_code = SUCCESS_EXIT_CODE;
+    status_code = STANDARD_SUCCESS_CODE;
 l_cleanup:
     return status_code;
 }
@@ -695,13 +286,8 @@ int main(int argc, char *argv[]) {
     goal_param = argv[GOAL_ARG_INDEX];
     filename_param = argv[FILENAME_ARG_INDEX];
 
-    datapoints_vector = VECTOR_allocate(sizeof(struct datapoint_item), DATAPOINTS_VECTOR_INITIAL_ITEM_RESERVE);
-    if (NULL == datapoints_vector) {
-        goto l_cleanup;
-    }
-
     /* Load input data. */
-    status_code = symnmf_parse_datapoints_file(filename_param, datapoints_vector, &data_dimension);
+    status_code = symnmf_parse_datapoints_file(filename_param, &datapoints_vector, &data_dimension);
     if (STANDARD_SUCCESS_CODE != status_code) {
         printf(GENERAL_ERROR_MESSAGE);  
         goto l_cleanup;

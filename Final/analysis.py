@@ -89,6 +89,22 @@ def process_input(filename):
 
 
 def perform_analysis(k_value, datapoints):
+    """
+    Read datapoints from an input file. 
+
+    Parameters
+    ----------
+    k_value : int
+        The number of clusters.
+    datapoints : np.ndarray
+        A 2D NumPy array of the input datapoints.
+
+    Returns
+    -------
+    tuple
+        A pair of silhouette scores, 
+        measuring the performance of the K-Means and SymNMF algorithms, respectively. 
+    """
     # Execute kmeans algorithm.
     datapoint_list = [tuple(point) for point in datapoints]
     clusters_list = kmeans(datapoint_list, k_value, MAX_ITERATIONS)
