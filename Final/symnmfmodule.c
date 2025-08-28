@@ -8,6 +8,14 @@
 #include "vector.h"
 
 /********************** Functions **********************/
+/**
+ * Convert the input numpy matrix into internal datastructure form.
+ * 
+ * @param matrix_array A 2D numpy array of the input matrix.
+ * @param output_matrix An optional output variable to contain the converted datastructure.
+ *  Note that the datastructure is dynamically allocated and must be freed via MATRIX_free().
+ * @return The status of the operation. STANDARD_SUCCESS_CODE for success, STANDARD_ERROR_CODE for error.
+ */
 static int symnmfmodule_numpy_array_to_matrix(
     PyArrayObject *matrix_array, 
     struct matrix **output_matrix
@@ -65,6 +73,15 @@ l_cleanup:
 }
 
 
+/**
+ * Convert the input numpy datapoints into internal datastructure form. 
+ * 
+ * @param datapoints_array A 2D numpy array of the input datapoints.
+ * @param output_vector An optional output variable to contain the converted datastructure.
+ *  Note that the datastructure is dynamically allocated and must be freed via SYMNMF_free_datapoint_vector().
+ * @param output_data_dimension An optional output variable to contain the dimension of the input datapoints.
+ * @return The status of the operation. STANDARD_SUCCESS_CODE for success, STANDARD_ERROR_CODE for error.
+ */
 static int symnmfmodule_datapoints_to_vector(
     PyArrayObject *datapoints_array, 
     struct vector **output_vector, 
@@ -138,6 +155,13 @@ l_cleanup:
 }
 
 
+/**
+ * Convert the result internal datastructure to numpy form. 
+ * 
+ * @param result_matrix The result to convert to numpy.
+ * @return A 2D numpy array representing the output matrix of the operation, or NULL if an error occurred.
+ *  Note that the underlying memory used by the numpy array is owned by numpy.
+ */
 static PyObject *symnmfmodule_build_output_matrix(struct matrix *result_matrix) {
     npy_intp matrix_dimensions[2] = {
         (npy_intp) result_matrix->row_count,
@@ -155,7 +179,7 @@ static PyObject *symnmfmodule_build_output_matrix(struct matrix *result_matrix) 
         return NULL;
     }
 
-    /* Notify numpy that is owns the data buffer. */
+    /* Notify numpy that it owns the data buffer. */
     PyArray_ENABLEFLAGS((PyArrayObject *) matrix_array, NPY_ARRAY_OWNDATA);
 
     return matrix_array;
@@ -245,18 +269,15 @@ l_cleanup:
         w_matrix = NULL;
     }
 
-    if (NULL == result_obj) {
-        /* Numpy does not yet own the buffer, safe to release. */
-        if (NULL != result_matrix) {
+    if (NULL != result_matrix) {
+        if (NULL == result_obj) {
+            /* Numpy does not yet own the buffer, safe to release. */
             MATRIX_free(result_matrix);
-            result_matrix = NULL;
-        }
-    } else {
-        /* Numpy owns the buffer, only release wrapper object. */
-        if (NULL != result_matrix) {
+        } else {
+            /* Numpy owns the buffer, only release wrapper object. */
             free(result_matrix);
-            result_matrix = NULL;
         }
+        result_matrix = NULL;
     }
 
     return result_obj;
@@ -299,7 +320,7 @@ static PyObject* symnmfmodule_sym(PyObject *self, PyObject *args) {
         goto l_cleanup;
     }
 
-    /* Execute algorithm to calculate diagonal degree matrix. */
+    /* Execute algorithm to calculate similarity matrix. */
     status_code = SYMNMF_calc_similarity_matrix(datapoints_vector, data_dimension, &result_matrix);
     if (STANDARD_SUCCESS_CODE != status_code) {
         PyErr_SetString(PyExc_TypeError, "Failed to calculate matrix.");
@@ -327,18 +348,15 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL == result_obj) {
-        /* Numpy does not yet own the buffer, safe to release. */
-        if (NULL != result_matrix) {
+    if (NULL != result_matrix) {
+        if (NULL == result_obj) {
+            /* Numpy does not yet own the buffer, safe to release. */
             MATRIX_free(result_matrix);
-            result_matrix = NULL;
-        }
-    } else {
-        /* Numpy owns the buffer, only release wrapper object. */
-        if (NULL != result_matrix) {
+        } else {
+            /* Numpy owns the buffer, only release wrapper object. */
             free(result_matrix);
-            result_matrix = NULL;
         }
+        result_matrix = NULL;
     }
 
     return result_obj;
@@ -409,18 +427,15 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL == result_obj) {
-        /* Numpy does not yet own the buffer, safe to release. */
-        if (NULL != result_matrix) {
+    if (NULL != result_matrix) {
+        if (NULL == result_obj) {
+            /* Numpy does not yet own the buffer, safe to release. */
             MATRIX_free(result_matrix);
-            result_matrix = NULL;
-        }
-    } else {
-        /* Numpy owns the buffer, only release wrapper object. */
-        if (NULL != result_matrix) {
+        } else {
+            /* Numpy owns the buffer, only release wrapper object. */
             free(result_matrix);
-            result_matrix = NULL;
         }
+        result_matrix = NULL;
     }
 
     return result_obj;
@@ -491,18 +506,15 @@ l_cleanup:
         datapoints_vector = NULL;
     }
 
-    if (NULL == result_obj) {
-        /* Numpy does not yet own the buffer, safe to release. */
-        if (NULL != result_matrix) {
+    if (NULL != result_matrix) {
+        if (NULL == result_obj) {
+            /* Numpy does not yet own the buffer, safe to release. */
             MATRIX_free(result_matrix);
-            result_matrix = NULL;
-        }
-    } else {
-        /* Numpy owns the buffer, only release wrapper object. */
-        if (NULL != result_matrix) {
+        } else {
+            /* Numpy owns the buffer, only release wrapper object. */
             free(result_matrix);
-            result_matrix = NULL;
         }
+        result_matrix = NULL;
     }
 
     return result_obj;
