@@ -201,7 +201,7 @@ def process_input(filename):
     np.ndarray
         A 2D NumPy array representing the input datapoints.
     """
-    return np.loadtxt(filename, delimiter=",")
+    return np.loadtxt(filename, delimiter=",", ndmin=2)
 
     
 if __name__ == "__main__":
@@ -221,5 +221,6 @@ if __name__ == "__main__":
         output_matrix = goal_handler(k_param, datapoints)
         print_results(output_matrix)
     except Exception as e:
+        print(e)
         print(GENERAL_ERROR_MESSAGE)
         sys.exit(ERROR_EXIT_CODE)
