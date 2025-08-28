@@ -85,7 +85,7 @@ def process_input(filename):
     np.ndarray
         A 2D NumPy array representing the input datapoints.
     """
-    return np.loadtxt(filename, delimiter=",")
+    return np.loadtxt(filename, delimiter=",", ndmin=2)
 
 
 def perform_analysis(k_value, datapoints):
@@ -118,6 +118,7 @@ def perform_analysis(k_value, datapoints):
 
     # Execute SymNMF algorithm.
     final_h_matrix = symnmf_goal_handler(k_value, datapoints)
+   
     # Assign labels by taking argmax of rows in final H.
     symnmf_labels = np.argmax(final_h_matrix, axis=1)
 
