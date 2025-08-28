@@ -110,6 +110,10 @@ static int symnmf_add_datapoint_to_vector(
 
     for (i = 0; i < data_dimension; i++) {
         temp_data[i] = strtod(buffer_cursor, &temp_cursor);
+        if (temp_cursor == buffer_cursor) {
+            /* Invalid input: No conversion performed. */
+            goto l_cleanup;
+        }
 
         /* Skip the comma delimiter. */
         buffer_cursor = temp_cursor + 1;
@@ -175,7 +179,6 @@ static int symnmf_parse_datapoints_file(
     do {
         status_code = symnmf_add_datapoint_to_vector(line_buffer, data_dimension, temp_datapoints_vector);
         if (STANDARD_SUCCESS_CODE != status_code) {
-            printf(GENERAL_ERROR_MESSAGE);  
             goto l_cleanup;
         }
 
@@ -185,7 +188,6 @@ static int symnmf_parse_datapoints_file(
         errno = 0;
         num_bytes_read = getline(&line_buffer, &line_length, input_file);
         if ((STANDARD_ERROR_CODE == num_bytes_read) && (0 != errno)) {
-            printf(GENERAL_ERROR_MESSAGE);  
             goto l_cleanup;
         }
     } while (num_bytes_read > 0);
