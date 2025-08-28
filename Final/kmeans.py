@@ -2,7 +2,7 @@ import sys
 import math
 
 # Constants for K-means behavior and validation
-DEFAULT_NUM_ITERATIONS = 400
+DEFAULT_NUM_ITERATIONS = 300
 CONVERGENCE_THRESHOLD = 0.001
 MINIMUM_VALID_K_VALUE = 1
 MINIMUM_VALID_NUM_ITERATIONS = 1
